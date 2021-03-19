@@ -1,3 +1,4 @@
+ 
 浏览器中tab页面之间进行通信，很常见，也是面试中经常被问到的问题，
 这里总结了一下，不同情况下的通信，大致可以分为是否同源（协议、域名和端口）和是否相关连（包含在当前页面中<iframe>元素，或者由当前页面弹出的窗口）
 
@@ -147,6 +148,6 @@ document.querySelector("#J_bridge").contentWindow.postMessage(JSON.stringify(dat
 和http://localhost:8000/second。
 
 参考链接：
-
+<a href='https://github.com/ZSI2017/blog/issues/10'> tab页面间通讯 </a>
 <a href='https://www.cnblogs.com/accordion/p/7535188.html'>跨浏览器tab页的通信解决方案尝试</a>
 <a href='https://blog.csdn.net/zhuzhupozhuzhuxia/article/details/76795472' >实现两个窗口通信方法－postMessage </a>
