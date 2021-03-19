@@ -149,4 +149,4 @@ document.querySelector("#J_bridge").contentWindow.postMessage(JSON.stringify(dat
 参考链接：
 
 <a href='https://www.cnblogs.com/accordion/p/7535188.html'>跨浏览器tab页的通信解决方案尝试</a>
-实现两个窗口通信方法－postMessage
+<a href='https://blog.csdn.net/zhuzhupozhuzhuxia/article/details/76795472' >实现两个窗口通信方法－postMessage </a>
