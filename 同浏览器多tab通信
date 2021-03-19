@@ -1,0 +1,151 @@
+浏览器中tab页面之间进行通信，很常见，也是面试中经常被问到的问题，这里总结了一下，不同情况下的通信，大致可以分为是否同源（协议、域名和端口）和是否相关连（包含在当前页面中<iframe>元素，或者由当前页面弹出的窗口）
+
+相关依赖页面之间的相互通信
+window.postMessage() 方法，可以安全的进行跨域，跨页面通信
+
+向其它窗口发送消息
+
+ otherWindow.postMessage(message,targetOrigin)
+接受两个参数：
+
+message: 要传递的数据，可以是任意基本类型或对象
+targetOrigin: 字符串参数，指明目标窗口的源，协议+域名+端口。这个参数是为了安全考虑。同时，设置成* ，表示可以传递给任意窗口，设置成"/",表明必须传递给与当前窗口同源
+message 事件
+消息传递过程中，都会触发window对象的message事件，以异步的方式触发。事件对象中包含三个参数：
+
+data: 消息主体
+origin: 消息来源的域,"http://www.123.com"
+source: 消息来源的window对象的代理,然后向来源窗口发送回执。如果是同一个域，则对象就是window。
+必须拿到其它窗口的一个引用，而不是当前窗口的应用，所以这种方式适合有依赖关系的页面之间通信
+不同依赖关系下，获取其它窗口应用的方法：
+
+页面与嵌套的iframe通信。
+获取iframe的contentWindow属性。或者通过命名/数值索引的window.frames[0]
+
+页面和其打开的新窗口通信。
+执行window.open返回的窗口对象。
+
+  var otherWindow = window.open("http://www.baidu.com")
+这里使用node起了两个端口不同的简单服务，直接使用node server.js,启动服务。server.js文件位置，服务启动后，打开http://localhost/，就可以看到页面。
+
+主页面：
+
+<div>
+  <h1> 主页面 </h1>
+  <iframe id="child" src="http://localhost:8000/second.html"></iframe>
+
+  <button id="child-btn"> 向子页面发送消息 </button>
+</div>
+<script>
+  document.querySelector("#child-btn").addEventListener("click",function(){
+    sendMessage({type:"parent",data:"子页面接收"})
+  })
+  function sendMessage(data) {
+    document.querySelector("#child").contentWindow.postMessage(JSON.stringify(data), '*');
+  }
+  window.addEventListener('message', function(e) {
+    console.log("received response: ", e.data);
+  })
+</script>
+子页面在8000的端口上输出。通过iframe引入子页面。然后利用contentWindow拿到子页面窗口的引用，就可以向子页面发送消息，targetOrigin设置成了*,保证在不同源上的子页面也可以收到消息。
+
+嵌套的子页面：
+
+ <h1> 子 iframe 页面</h1>
+  <button type="button" name="button">向父页面发送消息</button>
+  <script>
+  document.querySelector("button").addEventListener("click",function(e){
+    console.log("子页面 sending...")
+     window.parent.postMessage(JSON.stringify({type:"child",data:"父页面接收"}),'*')
+  },false)
+
+  window.addEventListener('message', function() {
+    console.log("received response: ", event.data);
+  })
+
+  </script>
+可以看到，子页面通过window.parent拿到了父页面的窗口引用，同时通过addEventListener监听了message事件，实时获取到父页面传过来的信息。这样不同源的两嵌套页面，就可以实现通信
+
+无关同源页面通信
+无关页面，相对应的就是既不是页面中包含的<iframe>元素，也不是当前页面弹出的窗口，没法使用之前提到的postMessage()进行通信。既然是同源页面，我们默认还是在同一浏览器中打开的，可以联想到HTML5规范中作为持久保存客户端数据的方案localStorage。
+
+要访问同一个localStorage对象，页面必须同域名，同协议，同端口
+
+将localStorage作为中转站，分别进行存储消息和获取消息操作，从而完成了页面间的通信，对应localStorage.setItem和localStorage.getItem方式。
+最重要的是使用storage事件，及时通知对方获取消息，对storage对象进行任何修改，都会在文档上触发storage事件。
+
+index.html:
+
+<button>click<button>
+
+ <script>
+    window.addEventListener("storage",function(ev){
+       if(ev.key === "message") {
+           // removeItem 同样触发storage 事件，此时ev.newValue 为空
+          if(!ev.newValue)
+              return;
+          var message = JSON.parse(ev.newValue);
+          console.log(message);
+       }
+    });
+    function sendMessage(message) {
+      console.log("exacted sendMessage");
+         localStorage.setItem('message',message);
+         localStorage.removeItem("message");
+    };
+    document.querySelector('button').onclick = function(){
+         sendMessage('this is message from A');
+  }
+    // 发送消息给B 页面。
+second.html
+
+<script>
+ window.addEventListener("storage",function(ev){
+       if(ev.key === "message") {
+           if(!ev.newValue)
+              return;
+            var message = ev.newValue;
+            console.log(message)
+            // 发送消息给A 页面
+            sendMessage("message echo from B");
+       }
+ });
+ function sendMessage(message) {
+    localStorage.setItem('message',JSON.stringify(message));
+    localStorage.removeItem("message");
+ }
+</script>
+从index.html和second.html两个页面可以看到，都监听了storage事件，方便及时获取消息。发送消息，则利用localStorage.setItem发送，为了不影响真实存储，同时removeItem了，所有在storage事件的回调里面，就判断了!ev.newValue是否为空，避免触发两次事件
+
+使用node启动服务，server.js文件，然后node server.js，
+两页面分别对应http://localhost/ 和http://localhost/second。
+
+无关不同源页面通信
+即在浏览器上打开了两个没有任何关系的tab，不用域，也任何依赖关系
+就可以结合前面使用的postMessage和localStorage，利用postMessage可以跨域访问，localStorage可以在无关页面之间通信的特点，利用bridge.html页面作为中转站，实现通信。
+
+首先看下HTML结构，在tabA和tabB是需要通信的两个页面，同时它们都包含了指向bridge.html的<iframe>元素。
+
+然后，以一次从tabA 到tabB的通信为例：
+
+tabA 发送消息。拿到iframe的引用，然后postMessage发送消息到tabB的iframe。
+document.querySelector("#J_bridge").contentWindow.postMessage(JSON.stringify(data),'/');
+
+然后bridge.html页面中转。
+
+通过window.addEventListener('message',function(e){}，监听到了tabA 中iframe发送的消息。
+利用localStorage.setItem存放消息，
+从而触发页面中 window.addEventListener('storage',function(ev){}的storage事件,
+最后 window.parent.postMessage(ev.newValue,'*')，获取到父页面的窗口引用，这里可以认为获取到了tabB页面的窗口引用，postMessage传递消息。
+最后tabB中获取message 消息。
+通过 window.addEventListener('message',function(e){})监听message 消息，获取到bridge.html传递的内容。
+
+可以发现，在bridge.html页面中转消息时，最后一步window.parent.postMessage发送消息，会同时触发tabA和tabB 里的message事件，因为两页面都通过iframe引入了bridge.html页面，所以这要在传递的消息中加上区分字段type,标识发送方。
+
+演示代码,然后node server.js启动服务，A页面和B页面对应url是http://localhost/
+和http://localhost:8000/second。
+
+参考链接：
+
+<a href=''>跨浏览器tab页的通信解决方案尝试</a>
+实现两个窗口通信方法－postMessage
